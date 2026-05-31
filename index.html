@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>議決権行使状況｜都道府県別ヒートマップ</title>
+  <style>
+    :root {
+      --bg: #f6f8fb;
+      --panel: #ffffff;
+      --text: #1f2937;
+      --muted: #6b7280;
+      --border: #d1d5db;
+      --accent: #2563eb;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    header { padding: 20px 28px 10px; }
+    header h1 { margin: 0 0 6px; font-size: 24px; letter-spacing: 0.03em; }
+    header p { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.6; }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 430px minmax(560px, 1fr);
+      gap: 20px;
+      padding: 16px 28px 28px;
+      align-items: start;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+    }
+
+    .input-panel {
+      padding: 18px;
+      max-height: calc(100vh - 120px);
+      overflow: auto;
+    }
+
+    .map-panel { padding: 18px; min-height: 680px; }
+    .input-panel h2, .map-panel h2 { margin: 0 0 14px; font-size: 18px; }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+
+    button {
+      border: 1px solid var(--border);
+      background: #fff;
+      color: var(--text);
+      border-radius: 10px;
+      padding: 9px 10px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    button:hover { border-color: var(--accent); color: var(--accent); }
+
+    .fixed-links {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 14px;
+      padding: 10px;
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .fixed-link-row span { font-weight: 700; }
+    .fixed-link-row a { color: #2563eb; text-decoration: underline; word-break: break-all; }
+
+    .as-of-settings {
+      display: grid;
+      gap: 6px;
+      margin-bottom: 14px;
+      padding: 10px;
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 12px;
+    }
+
+    .as-of-settings label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .as-of-settings input {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 13px;
+    }
+
+    .as-of-display {
+      display: inline-block;
+      margin: 0 0 14px;
+      padding: 6px 10px;
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 999px;
+      color: #1e40af;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .pref-header, .pref-row {
+      display: grid;
+      grid-template-columns: 86px 86px 86px 72px;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .pref-header {
+      position: sticky;
+      top: -18px;
+      background: var(--panel);
+      z-index: 3;
+      padding: 8px 0;
+      border-bottom: 2px solid #e5e7eb;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .pref-row { padding: 6px 0; border-bottom: 1px solid #eef2f7; font-size: 13px; }
+
+    .pref-row input[type="number"] {
+      width: 86px;
+      padding: 6px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .rate-cell { text-align: right; font-weight: 800; font-variant-numeric: tabular-nums; }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(110px, 1fr));
+      gap: 10px;
+      margin-bottom: 18px;
+    }
+
+    .metric { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 12px; padding: 10px; }
+    .metric-label { color: var(--muted); font-size: 12px; margin-bottom: 4px; }
+    .metric-value { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }
+
+    .decision-box {
+      margin: 0 0 18px;
+      padding: 18px 18px;
+      border: 2px solid #f97316;
+      border-radius: 16px;
+      background: linear-gradient(135deg, #fff7ed, #ffffff);
+      text-align: center;
+      box-shadow: 0 8px 18px rgba(249, 115, 22, 0.12);
+    }
+
+    .decision-line-main {
+      display: block;
+      color: #9a3412;
+      font-size: 22px;
+      font-weight: 900;
+      letter-spacing: 0.06em;
+      line-height: 1.3;
+    }
+
+    .decision-line-sub {
+      display: inline-flex;
+      align-items: baseline;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 8px;
+      color: #111827;
+      font-weight: 900;
+      line-height: 1.2;
+    }
+
+    .decision-prefix {
+      font-size: 24px;
+      color: #9a3412;
+    }
+
+    .decision-value {
+      font-size: 46px;
+      line-height: 1;
+      color: #dc2626;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.03em;
+    }
+
+    .decision-value.achieved {
+      color: #2563eb;
+      font-size: 52px;
+    }
+
+    .heatmap-wrap { overflow-x: auto; padding-bottom: 8px; }
+
+    .tile-map {
+      display: grid;
+      grid-template-columns: repeat(15, 60px);
+      grid-template-rows: repeat(10, 54px);
+      gap: 6px;
+      min-width: 970px;
+      justify-content: center;
+      padding: 12px;
+    }
+
+    .tile {
+      border: 1px solid rgba(255,255,255,0.95);
+      border-radius: 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      line-height: 1.15;
+      color: #111827;
+      box-shadow: inset 0 0 0 1px rgba(17, 24, 39, 0.06);
+      padding: 2px;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+
+    .tile:hover { transform: translateY(-2px); box-shadow: 0 8px 16px rgba(15, 23, 42, 0.16); z-index: 2; }
+    .tile-name { font-size: 12px; font-weight: 700; white-space: nowrap; }
+    .tile-rate { font-size: 12px; font-weight: 800; margin-top: 2px; font-variant-numeric: tabular-nums; }
+
+    .legend { display: flex; align-items: center; justify-content: center; gap: 10px; margin-top: 14px; color: var(--muted); font-size: 13px; }
+    .gradient {
+      width: 260px;
+      height: 14px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: linear-gradient(90deg, #c2410c 0%, #fdba74 55%, #ffedd5 69.9%, #dbeafe 70%, #60a5fa 85%, #1d4ed8 100%);
+    }
+
+    .note { margin-top: 14px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+
+    textarea {
+      width: 100%;
+      min-height: 180px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px;
+      resize: vertical;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+      margin-top: 10px;
+    }
+
+    @media (max-width: 1080px) {
+      .layout { grid-template-columns: 1fr; }
+      .input-panel { max-height: none; }
+      .summary { grid-template-columns: repeat(2, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>総会 議決権行使状況ヒートマップ</h1>
+    <p>都道府県別に「議決権総数」と「行使数」を入力すると、行使率を自動計算してヒートマップで可視化します。70%未満は暖色、70%以上は寒色で表示します。</p>
+  </header>
+
+  <main class="layout">
+    <section class="panel input-panel">
+      <h2>実数入力</h2>
+      <div class="toolbar">
+        <button type="button" id="clearButton">行使数クリア</button>
+        <button type="button" id="sampleButton">サンプル</button>
+        <button type="button" id="exportCsvButton">CSV出力</button>
+        <button type="button" id="copyButton">出力コピー</button>
+        <button type="button" id="generateButton">公開HTML生成</button>
+        <button type="button" id="downloadButton">公開HTML保存</button>
+      </div>
+
+      <div class="fixed-links">
+        <div class="fixed-link-row"><span>定時会員総会の特設ページはコチラ → </span><a href="https://www.jaco.or.jp/kaiin/39th/" target="_blank" rel="noopener noreferrer">https://www.jaco.or.jp/kaiin/39th/</a></div>
+        <div class="fixed-link-row"><span>議決権行使（投票）はマイページから → </span><a href="https://jaco1972.my.site.com/login" target="_blank" rel="noopener noreferrer">https://jaco1972.my.site.com/login</a></div>
+        <div class="fixed-link-row"><span>マイページがわからない方の投票はこちら → </span><a href="https://docs.google.com/forms/d/e/1FAIpQLSeWjtoZrRwrd3sFN7Ue2rxkSqJf2it7nIjBuZaQt5S1yHhFGQ/viewform" target="_blank" rel="noopener noreferrer">https://docs.google.com/forms/d/e/1FAIpQLSeWjtoZrRwrd3sFN7Ue2rxkSqJf2it7nIjBuZaQt5S1yHhFGQ/viewform</a></div>
+      </div>
+
+      <div class="as-of-settings">
+        <label for="asOfInput">集計時点</label>
+        <input id="asOfInput" type="text" placeholder="例：2026年5月30日 17時時点" />
+      </div>
+
+      <div class="pref-header">
+        <div>都道府県</div>
+        <div>議決権総数</div>
+        <div>行使数</div>
+        <div>行使率</div>
+      </div>
+      <div id="controls"></div>
+
+      <textarea id="outputBox" placeholder="CSV出力または公開HTMLがここに表示されます"></textarea>
+    </section>
+
+    <section class="panel map-panel">
+      <h2>都道府県別 議決権行使状況</h2>
+      <div class="as-of-display" id="asOfDisplay">集計時点未入力</div>
+
+      <div class="summary">
+        <div class="metric"><div class="metric-label">全国行使率</div><div class="metric-value" id="nationalRate">0.0%</div></div>
+        <div class="metric"><div class="metric-label">総議決権数</div><div class="metric-value" id="totalEligible">0</div></div>
+        <div class="metric"><div class="metric-label">総行使数</div><div class="metric-value" id="totalVoted">0</div></div>
+        <div class="metric"><div class="metric-label">最高</div><div class="metric-value" id="maxRate">-</div></div>
+        <div class="metric"><div class="metric-label">70%以上</div><div class="metric-value" id="highCount">0</div></div>
+      </div>
+
+      <div class="decision-box" aria-live="polite">
+        <span class="decision-line-main" id="decisionStatusLabel">特別決議成立まで</span>
+        <span class="decision-line-sub">
+          <span class="decision-prefix" id="decisionStatusPrefix">あと</span>
+          <span class="decision-value" id="specialResolutionRemaining">4,410票</span>
+        </span>
+      </div>
+
+      <div class="heatmap-wrap"><div class="tile-map" id="tileMap"></div></div>
+      <div class="legend"><span>低い</span><div class="gradient"></div><span>高い</span></div>
+
+      <div class="note">
+        ※ タイルの上段は都道府県名、下段は行使率です。<br>
+        ※ 色は行使率で決まります。70%未満は暖色、70%以上は寒色で表示します。<br>
+        ※ 全国行使率は、総行使数 ÷ 総議決権数で算出しています。<br>
+        ※ 議決権総数には、アップロードされた都道府県別会員数をプリセットしています。<br>
+        ※ 行使数が議決権総数を超えた場合は、入力欄に赤枠を表示し、行使率は100%として描画します。
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const TARGET_RATE = 70;
+    const SPECIAL_RESOLUTION_REQUIRED = 4410;
+
+    const LINKS = [
+      { text: "定時会員総会の特設ページはコチラ → ", url: "https://www.jaco.or.jp/kaiin/39th/" },
+      { text: "議決権行使（投票）はマイページから → ", url: "https://jaco1972.my.site.com/login" },
+      { text: "マイページがわからない方の投票はこちら → ", url: "https://docs.google.com/forms/d/e/1FAIpQLSeWjtoZrRwrd3sFN7Ue2rxkSqJf2it7nIjBuZaQt5S1yHhFGQ/viewform" }
+    ];
+
+    const ELIGIBLE_PRESETS = {
+      "北海道": 179, "青森県": 27, "岩手県": 62, "宮城県": 133, "秋田県": 56, "山形県": 68, "福島県": 103,
+      "茨城県": 171, "栃木県": 112, "群馬県": 108, "埼玉県": 323, "千葉県": 300, "東京都": 977, "神奈川県": 457,
+      "山梨県": 32, "新潟県": 136, "長野県": 119, "富山県": 73, "石川県": 49, "福井県": 34, "岐阜県": 71,
+      "静岡県": 193, "愛知県": 397, "三重県": 76, "滋賀県": 63, "京都府": 142, "大阪府": 559, "兵庫県": 306,
+      "奈良県": 70, "和歌山県": 41, "鳥取県": 11, "島根県": 20, "岡山県": 177, "広島県": 116, "山口県": 38,
+      "徳島県": 38, "香川県": 55, "愛媛県": 48, "高知県": 25, "福岡県": 231, "佐賀県": 27, "長崎県": 42,
+      "熊本県": 118, "大分県": 64, "宮崎県": 80, "鹿児島県": 48, "沖縄県": 39
+    };
+
+    const prefs = [
+      { name: "北海道", row: 1, col: 12 },
+      { name: "青森県", row: 3, col: 12 },
+      { name: "秋田県", row: 4, col: 11 },
+      { name: "岩手県", row: 4, col: 12 },
+      { name: "山形県", row: 5, col: 11 },
+      { name: "宮城県", row: 5, col: 12 },
+      { name: "福島県", row: 6, col: 12 },
+      { name: "新潟県", row: 6, col: 10 },
+      { name: "富山県", row: 6, col: 8 },
+      { name: "石川県", row: 6, col: 7 },
+      { name: "福井県", row: 7, col: 7 },
+      { name: "長野県", row: 6, col: 9 },
+      { name: "群馬県", row: 7, col: 10 },
+      { name: "栃木県", row: 6, col: 11 },
+      { name: "茨城県", row: 7, col: 12 },
+      { name: "岐阜県", row: 7, col: 8 },
+      { name: "山梨県", row: 7, col: 9 },
+      { name: "埼玉県", row: 7, col: 11 },
+      { name: "千葉県", row: 8, col: 12 },
+      { name: "東京都", row: 8, col: 11 },
+      { name: "神奈川県", row: 8, col: 10 },
+      { name: "静岡県", row: 8, col: 9 },
+      { name: "愛知県", row: 8, col: 8 },
+      { name: "三重県", row: 8, col: 7 },
+      { name: "滋賀県", row: 7, col: 6 },
+      { name: "京都府", row: 7, col: 5 },
+      { name: "大阪府", row: 8, col: 5 },
+      { name: "奈良県", row: 8, col: 6 },
+      { name: "和歌山県", row: 9, col: 6 },
+      { name: "兵庫県", row: 7, col: 4 },
+      { name: "鳥取県", row: 6, col: 3 },
+      { name: "島根県", row: 6, col: 2 },
+      { name: "岡山県", row: 7, col: 3 },
+      { name: "広島県", row: 7, col: 2 },
+      { name: "山口県", row: 7, col: 1 },
+      { name: "香川県", row: 8, col: 3 },
+      { name: "徳島県", row: 9, col: 3 },
+      { name: "愛媛県", row: 8, col: 2 },
+      { name: "高知県", row: 9, col: 2 },
+      { name: "福岡県", row: 7, col: 0 },
+      { name: "佐賀県", row: 7, col: -1 },
+      { name: "熊本県", row: 8, col: -1 },
+      { name: "長崎県", row: 8, col: -2 },
+      { name: "大分県", row: 8, col: 0 },
+      { name: "宮崎県", row: 9, col: 0 },
+      { name: "鹿児島県", row: 9, col: -1 },
+      { name: "沖縄県", row: 10, col: -1 }
+    ];
+
+    const data = {};
+    const controls = document.getElementById("controls");
+    const tileMap = document.getElementById("tileMap");
+    const outputBox = document.getElementById("outputBox");
+    const asOfInput = document.getElementById("asOfInput");
+    const asOfDisplay = document.getElementById("asOfDisplay");
+
+    prefs.forEach(function(pref) {
+      data[pref.name] = { eligible: ELIGIBLE_PRESETS[pref.name] || 0, voted: 0, rate: 0 };
+    });
+
+    function parseCount(value) {
+      const normalized = String(value || "").replace(/,/g, "");
+      const num = Number(normalized);
+      if (Number.isNaN(num) || num < 0) return 0;
+      return Math.floor(num);
+    }
+
+    function calcRate(eligible, voted) {
+      if (eligible <= 0) return 0;
+      return Math.min(100, (voted / eligible) * 100);
+    }
+
+    function colorScale(rate) {
+      const value = Math.max(0, Math.min(100, rate));
+      if (value < TARGET_RATE) {
+        const t = value / TARGET_RATE;
+        const start = [194, 65, 12];
+        const end = [255, 237, 213];
+        const r = Math.round(start[0] + (end[0] - start[0]) * t);
+        const g = Math.round(start[1] + (end[1] - start[1]) * t);
+        const b = Math.round(start[2] + (end[2] - start[2]) * t);
+        return "rgb(" + r + ", " + g + ", " + b + ")";
+      }
+      const t = (value - TARGET_RATE) / (100 - TARGET_RATE || 1);
+      const start = [219, 234, 254];
+      const end = [29, 78, 216];
+      const r = Math.round(start[0] + (end[0] - start[0]) * t);
+      const g = Math.round(start[1] + (end[1] - start[1]) * t);
+      const b = Math.round(start[2] + (end[2] - start[2]) * t);
+      return "rgb(" + r + ", " + g + ", " + b + ")";
+    }
+
+    function textColor(rate) {
+      if (rate <= 20 || rate >= 88) return "#ffffff";
+      return "#111827";
+    }
+
+    function shortName(name) {
+      if (name === "北海道") return "北海道";
+      if (name === "京都府") return "京都";
+      return name.replace("都", "").replace("府", "").replace("県", "");
+    }
+
+    function formatNumber(num) {
+      return Number(num).toLocaleString("ja-JP");
+    }
+
+    function getSpecialResolutionState(totalVoted) {
+      const remaining = SPECIAL_RESOLUTION_REQUIRED - totalVoted;
+      if (remaining <= 0) {
+        return { label: "特別決議成立", prefix: "", value: "達成！", achieved: true };
+      }
+      return { label: "特別決議成立まで", prefix: "あと", value: formatNumber(remaining) + "票", achieved: false };
+    }
+
+    function escapeHTML(value) {
+      return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function makeTileHTML(name, rate) {
+      return '<div class="tile-name">' + escapeHTML(shortName(name)) + '</div>' +
+             '<div class="tile-rate">' + rate.toFixed(1) + '%</div>';
+    }
+
+    function makeLinksHTML() {
+      return LINKS.map(function(link) {
+        return '<div class="fixed-link-row"><span>' + escapeHTML(link.text) + '</span><a href="' + escapeHTML(link.url) + '" target="_blank" rel="noopener noreferrer">' + escapeHTML(link.url) + '</a></div>';
+      }).join("\n");
+    }
+
+    function getAsOfText() {
+      const value = String(asOfInput.value || "").trim();
+      return value ? value : "集計時点未入力";
+    }
+
+    function updateAsOfDisplay() {
+      asOfDisplay.textContent = getAsOfText();
+    }
+
+    function createControls() {
+      prefs.forEach(function(pref) {
+        const row = document.createElement("div");
+        row.className = "pref-row";
+
+        const label = document.createElement("label");
+        label.textContent = pref.name;
+        label.setAttribute("for", "eligible-" + pref.name);
+
+        const eligibleInput = document.createElement("input");
+        eligibleInput.id = "eligible-" + pref.name;
+        eligibleInput.type = "number";
+        eligibleInput.min = "0";
+        eligibleInput.step = "1";
+        eligibleInput.inputMode = "numeric";
+        eligibleInput.placeholder = "0";
+        eligibleInput.value = String(data[pref.name].eligible);
+        eligibleInput.addEventListener("input", function() { setCounts(pref.name); });
+
+        const votedInput = document.createElement("input");
+        votedInput.id = "voted-" + pref.name;
+        votedInput.type = "number";
+        votedInput.min = "0";
+        votedInput.step = "1";
+        votedInput.inputMode = "numeric";
+        votedInput.placeholder = "0";
+        votedInput.addEventListener("input", function() { setCounts(pref.name); });
+
+        const rateCell = document.createElement("div");
+        rateCell.className = "rate-cell";
+        rateCell.id = "rate-" + pref.name;
+        rateCell.textContent = "0.0%";
+
+        row.appendChild(label);
+        row.appendChild(eligibleInput);
+        row.appendChild(votedInput);
+        row.appendChild(rateCell);
+        controls.appendChild(row);
+      });
+    }
+
+    function createMap() {
+      const minCol = Math.min.apply(null, prefs.map(function(p) { return p.col; }));
+      prefs.forEach(function(pref) {
+        const tile = document.createElement("div");
+        tile.className = "tile";
+        tile.id = "tile-" + pref.name;
+        tile.style.gridRow = String(pref.row);
+        tile.style.gridColumn = String(pref.col - minCol + 1);
+        tile.style.background = colorScale(0);
+        tile.style.color = textColor(0);
+        tile.title = pref.name + ": 0.0%";
+        tile.innerHTML = makeTileHTML(pref.name, 0);
+        tileMap.appendChild(tile);
+      });
+    }
+
+    function setCounts(prefName) {
+      const eligibleInput = document.getElementById("eligible-" + prefName);
+      const votedInput = document.getElementById("voted-" + prefName);
+      const eligible = parseCount(eligibleInput.value);
+      const voted = parseCount(votedInput.value);
+      const rate = calcRate(eligible, voted);
+
+      data[prefName] = { eligible: eligible, voted: voted, rate: rate };
+
+      const invalid = eligible > 0 && voted > eligible;
+      votedInput.style.borderColor = invalid ? "#dc2626" : "#d1d5db";
+      votedInput.style.background = invalid ? "#fef2f2" : "#ffffff";
+
+      const rateCell = document.getElementById("rate-" + prefName);
+      const tile = document.getElementById("tile-" + prefName);
+
+      rateCell.textContent = rate.toFixed(1) + "%";
+      rateCell.style.color = invalid ? "#dc2626" : "#111827";
+
+      if (tile) {
+        tile.style.background = colorScale(rate);
+        tile.style.color = textColor(rate);
+        tile.title = prefName + ": " + rate.toFixed(1) + "%（" + formatNumber(voted) + " / " + formatNumber(eligible) + "）";
+        tile.innerHTML = makeTileHTML(prefName, rate);
+      }
+
+      updateSummary();
+    }
+
+    function updateSummary() {
+      const names = Object.keys(data);
+      const totalEligible = names.reduce(function(sum, name) { return sum + data[name].eligible; }, 0);
+      const totalVoted = names.reduce(function(sum, name) { return sum + data[name].voted; }, 0);
+      const nationalRate = totalEligible > 0 ? Math.min(100, (totalVoted / totalEligible) * 100) : 0;
+      const asOfText = getAsOfText();
+      const special = getSpecialResolutionState(totalVoted);
+      const validNames = names.filter(function(name) { return data[name].eligible > 0; });
+
+      let maxName = null;
+      validNames.forEach(function(name) {
+        if (maxName === null || data[name].rate > data[maxName].rate) maxName = name;
+      });
+
+      const high = validNames.filter(function(name) { return data[name].rate >= TARGET_RATE; }).length;
+
+      document.getElementById("nationalRate").textContent = nationalRate.toFixed(1) + "%";
+      document.getElementById("totalEligible").textContent = formatNumber(totalEligible);
+      document.getElementById("totalVoted").textContent = formatNumber(totalVoted);
+      document.getElementById("maxRate").textContent = maxName ? shortName(maxName) + " " + data[maxName].rate.toFixed(1) + "%" : "-";
+      document.getElementById("highCount").textContent = high + "県";
+
+      const labelElement = document.getElementById("decisionStatusLabel");
+      const prefixElement = document.getElementById("decisionStatusPrefix");
+      const valueElement = document.getElementById("specialResolutionRemaining");
+
+      labelElement.textContent = special.label;
+      prefixElement.textContent = special.prefix;
+      prefixElement.style.display = special.prefix ? "inline" : "none";
+      valueElement.textContent = special.value;
+      valueElement.classList.toggle("achieved", special.achieved);
+    }
+
+    function clearAll() {
+      prefs.forEach(function(pref) {
+        const preset = ELIGIBLE_PRESETS[pref.name] || 0;
+        document.getElementById("eligible-" + pref.name).value = String(preset);
+        document.getElementById("voted-" + pref.name).value = "";
+        setCounts(pref.name);
+      });
+      outputBox.value = "";
+    }
+
+    function sampleData() {
+      prefs.forEach(function(pref) {
+        const eligible = ELIGIBLE_PRESETS[pref.name] || 0;
+        const rate = 0.35 + Math.random() * 0.5;
+        const voted = Math.round(eligible * rate);
+        document.getElementById("eligible-" + pref.name).value = String(eligible);
+        document.getElementById("voted-" + pref.name).value = String(voted);
+        setCounts(pref.name);
+      });
+    }
+
+    function exportCSV() {
+      const rows = ["都道府県,議決権総数,行使数,行使率(%)"];
+      prefs.forEach(function(pref) {
+        const d = data[pref.name];
+        rows.push(pref.name + "," + d.eligible + "," + d.voted + "," + d.rate.toFixed(1));
+      });
+      const csv = rows.join("\n");
+      outputBox.value = csv;
+      return csv;
+    }
+
+    function copyOutput() {
+      const text = outputBox.value || exportCSV();
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function() {
+          alert("出力内容をコピーしました。");
+        }).catch(function() {
+          outputBox.select();
+          document.execCommand("copy");
+          alert("出力内容をコピーしました。");
+        });
+      } else {
+        outputBox.select();
+        document.execCommand("copy");
+        alert("出力内容をコピーしました。");
+      }
+    }
+
+    function getFixedData() {
+      return prefs.map(function(pref) {
+        return {
+          name: pref.name,
+          row: pref.row,
+          col: pref.col,
+          eligible: data[pref.name].eligible,
+          voted: data[pref.name].voted,
+          rate: data[pref.name].rate
+        };
+      });
+    }
+
+    function buildPublicHTML() {
+      const fixedData = getFixedData();
+      const totalEligible = fixedData.reduce(function(sum, d) { return sum + d.eligible; }, 0);
+      const totalVoted = fixedData.reduce(function(sum, d) { return sum + d.voted; }, 0);
+      const nationalRate = totalEligible > 0 ? Math.min(100, (totalVoted / totalEligible) * 100) : 0;
+      const asOfText = getAsOfText();
+      const special = getSpecialResolutionState(totalVoted);
+      const validData = fixedData.filter(function(d) { return d.eligible > 0; });
+
+      let maxData = null;
+      validData.forEach(function(d) {
+        if (maxData === null || d.rate > maxData.rate) maxData = d;
+      });
+
+      const highCount = validData.filter(function(d) { return d.rate >= TARGET_RATE; }).length;
+      const minCol = Math.min.apply(null, fixedData.map(function(p) { return p.col; }));
+
+      const tileHTML = fixedData.map(function(pref) {
+        const safeName = escapeHTML(pref.name);
+        const safeShort = escapeHTML(shortName(pref.name));
+        const bg = colorScale(pref.rate);
+        const fg = textColor(pref.rate);
+        const title = safeName + ": " + pref.rate.toFixed(1) + "%（" + formatNumber(pref.voted) + " / " + formatNumber(pref.eligible) + "）";
+        return "<div class=\"tile\" title=\"" + title + "\" style=\"grid-row:" + pref.row + "; grid-column:" + (pref.col - minCol + 1) + "; background:" + bg + "; color:" + fg + ";\"><div class=\"tile-name\">" + safeShort + "</div><div class=\"tile-rate\">" + pref.rate.toFixed(1) + "%</div></div>";
+      }).join("\n");
+
+      const tableHTML = fixedData.map(function(pref) {
+        return "<tr><td>" + escapeHTML(pref.name) + "</td><td>" + formatNumber(pref.eligible) + "</td><td>" + formatNumber(pref.voted) + "</td><td>" + pref.rate.toFixed(1) + "%</td></tr>";
+      }).join("\n");
+
+      const prefixHTML = special.prefix ? '<span class="decision-prefix">' + escapeHTML(special.prefix) + '</span>' : '';
+
+      return [
+        "<!DOCTYPE html>",
+        "<html lang=\"ja\">",
+        "<head>",
+        "  <meta charset=\"UTF-8\" />",
+        "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\" />",
+        "  <title>議決権行使状況｜都道府県別ヒートマップ 公開用</title>",
+        "  <style>",
+        "    :root { --bg:#f6f8fb; --panel:#ffffff; --text:#1f2937; --muted:#6b7280; --border:#d1d5db; }",
+        "    * { box-sizing:border-box; }",
+        "    body { margin:0; font-family:system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif; background:var(--bg); color:var(--text); }",
+        "    header { padding:24px 28px 10px; text-align:center; }",
+        "    header h1 { margin:0 0 6px; font-size:24px; letter-spacing:.03em; }",
+        "    header p { margin:0; color:var(--muted); font-size:14px; line-height:1.6; }",
+        "    main { max-width:1080px; margin:0 auto; padding:16px 28px 28px; }",
+        "    .panel { background:var(--panel); border:1px solid var(--border); border-radius:16px; box-shadow:0 8px 24px rgba(15,23,42,.06); padding:18px; }",
+        "    h2 { margin:0 0 14px; font-size:18px; }",
+        "    .summary { display:grid; grid-template-columns:repeat(5,minmax(110px,1fr)); gap:10px; margin-bottom:18px; }",
+        "    .metric { background:#f9fafb; border:1px solid #e5e7eb; border-radius:12px; padding:10px; }",
+        "    .metric-label { color:var(--muted); font-size:12px; margin-bottom:4px; }",
+        "    .metric-value { font-size:20px; font-weight:800; font-variant-numeric:tabular-nums; }",
+        "    .decision-box { margin:0 0 18px; padding:18px 18px; border:2px solid #f97316; border-radius:16px; background:linear-gradient(135deg,#fff7ed,#ffffff); text-align:center; box-shadow:0 8px 18px rgba(249,115,22,.12); }",
+        "    .decision-line-main { display:block; color:#9a3412; font-size:22px; font-weight:900; letter-spacing:.06em; line-height:1.3; }",
+        "    .decision-line-sub { display:inline-flex; align-items:baseline; justify-content:center; gap:8px; margin-top:8px; color:#111827; font-weight:900; line-height:1.2; }",
+        "    .decision-prefix { font-size:24px; color:#9a3412; }",
+        "    .decision-value { font-size:46px; line-height:1; color:#dc2626; font-variant-numeric:tabular-nums; letter-spacing:-.03em; }",
+        "    .decision-value.achieved { color:#2563eb; font-size:52px; }",
+        "    .fixed-links { display:grid; gap:8px; margin-bottom:16px; padding:12px; background:#f9fafb; border:1px solid #e5e7eb; border-radius:12px; font-size:14px; line-height:1.6; }",
+        "    .fixed-link-row span { font-weight:700; }",
+        "    .fixed-link-row a { color:#2563eb; text-decoration:underline; word-break:break-all; }",
+        "    .as-of-display { display:inline-block; margin:0 0 14px; padding:6px 10px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:999px; color:#1e40af; font-size:13px; font-weight:800; }",
+        "    .heatmap-wrap { overflow-x:auto; padding-bottom:8px; }",
+        "    .tile-map { display:grid; grid-template-columns:repeat(15,60px); grid-template-rows:repeat(10,54px); gap:6px; min-width:970px; justify-content:center; padding:12px; }",
+        "    .tile { border:1px solid rgba(255,255,255,.95); border-radius:10px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center; line-height:1.15; box-shadow:inset 0 0 0 1px rgba(17,24,39,.06); padding:2px; }",
+        "    .tile-name { font-size:12px; font-weight:700; white-space:nowrap; }",
+        "    .tile-rate { font-size:12px; font-weight:800; margin-top:2px; font-variant-numeric:tabular-nums; }",
+        "    .legend { display:flex; align-items:center; justify-content:center; gap:10px; margin-top:14px; color:var(--muted); font-size:13px; }",
+        "    .gradient { width:260px; height:14px; border-radius:999px; border:1px solid var(--border); background:linear-gradient(90deg,#c2410c 0%,#fdba74 55%,#ffedd5 69.9%,#dbeafe 70%,#60a5fa 85%,#1d4ed8 100%); }",
+        "    .note { margin-top:14px; color:var(--muted); font-size:12px; line-height:1.6; }",
+        "    .table-wrap { overflow-x:auto; margin-top:18px; }",
+        "    table { width:100%; border-collapse:collapse; font-size:13px; }",
+        "    th,td { border-bottom:1px solid #e5e7eb; padding:7px 8px; text-align:right; }",
+        "    th:first-child,td:first-child { text-align:left; }",
+        "    th { background:#f9fafb; color:var(--muted); }",
+        "    @media (max-width:800px){ .summary{grid-template-columns:repeat(2,1fr);} }",
+        "  </style>",
+        "</head>",
+        "<body>",
+        "  <header>",
+        "    <h1>総会 議決権行使状況ヒートマップ</h1>",
+        "    <p>都道府県別の議決権行使状況を閲覧専用形式で表示しています。70%未満は暖色、70%以上は寒色で表示します。</p>",
+        "  </header>",
+        "  <main>",
+        "    <section class=\"panel\">",
+        "      <h2>都道府県別 議決権行使状況</h2>",
+        "      <div class=\"as-of-display\">" + escapeHTML(asOfText) + "</div>",
+        "      <div class=\"fixed-links\">",
+        makeLinksHTML(),
+        "      </div>",
+        "      <div class=\"summary\">",
+        "        <div class=\"metric\"><div class=\"metric-label\">全国行使率</div><div class=\"metric-value\">" + nationalRate.toFixed(1) + "%</div></div>",
+        "        <div class=\"metric\"><div class=\"metric-label\">総議決権数</div><div class=\"metric-value\">" + formatNumber(totalEligible) + "</div></div>",
+        "        <div class=\"metric\"><div class=\"metric-label\">総行使数</div><div class=\"metric-value\">" + formatNumber(totalVoted) + "</div></div>",
+        "        <div class=\"metric\"><div class=\"metric-label\">最高</div><div class=\"metric-value\">" + (maxData ? escapeHTML(shortName(maxData.name)) + " " + maxData.rate.toFixed(1) + "%" : "-") + "</div></div>",
+        "        <div class=\"metric\"><div class=\"metric-label\">70%以上</div><div class=\"metric-value\">" + highCount + "県</div></div>",
+        "      </div>",
+        "      <div class=\"decision-box\"><span class=\"decision-line-main\">" + escapeHTML(special.label) + "</span><span class=\"decision-line-sub\">" + prefixHTML + "<span class=\"decision-value" + (special.achieved ? " achieved" : "") + "\">" + escapeHTML(special.value) + "</span></span></div>",
+        "      <div class=\"heatmap-wrap\"><div class=\"tile-map\">",
+        tileHTML,
+        "      </div></div>",
+        "      <div class=\"legend\"><span>低い</span><div class=\"gradient\"></div><span>高い</span></div>",
+        "      <div class=\"table-wrap\"><table><thead><tr><th>都道府県</th><th>議決権総数</th><th>行使数</th><th>行使率</th></tr></thead><tbody>",
+        tableHTML,
+        "      </tbody></table></div>",
+        "      <div class=\"note\">※ 色は行使率で決まります。70%未満は暖色、70%以上は寒色で表示します。<br>※ 全国行使率は、総行使数 ÷ 総議決権数で算出しています。<br>※ 議決権総数には、都道府県別会員数をプリセットしています。</div>",
+        "    </section>",
+        "  </main>",
+        "</body>",
+        "</html>"
+      ].join("\n");
+    }
+
+    function generatePublicHTML() {
+      outputBox.value = buildPublicHTML();
+      alert("公開用HTMLを生成しました。下のテキスト欄の内容をコピーして、public.html などの名前で保存してください。");
+    }
+
+    function downloadPublicHTML() {
+      const html = buildPublicHTML();
+      outputBox.value = html;
+      const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "public-voting-rights-heatmap.html";
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function() { URL.revokeObjectURL(url); }, 1000);
+    }
+
+    function runTests() {
+      console.assert(prefs.length === 47, "prefs should contain 47 prefectures");
+      console.assert(TARGET_RATE === 70, "target rate should be 70");
+      console.assert(SPECIAL_RESOLUTION_REQUIRED === 4410, "special resolution threshold should be 4410");
+      console.assert(getSpecialResolutionState(4409).value === "1票", "special resolution should show remaining vote count");
+      console.assert(getSpecialResolutionState(4410).value === "達成！", "special resolution should show achieved at threshold");
+      console.assert(getSpecialResolutionState(4410).achieved === true, "special resolution should be marked achieved");
+      console.assert(Object.values(ELIGIBLE_PRESETS).reduce(function(sum, value) { return sum + value; }, 0) === 6614, "prefecture eligible presets should sum to 6614");
+      console.assert(shortName("北海道") === "北海道", "北海道 must not become 北海");
+      console.assert(shortName("京都府") === "京都", "京都府 should display as 京都");
+      console.assert(calcRate(100, 50) === 50, "calcRate should return 50");
+      console.assert(calcRate(100, 150) === 100, "calcRate should cap at 100");
+      console.assert(parseCount("1,234") === 1234, "parseCount should parse comma-separated values");
+      console.assert(colorScale(0) !== colorScale(69.9), "colorScale should vary below target rate");
+      console.assert(colorScale(70) !== colorScale(100), "colorScale should vary at or above target rate");
+      console.assert(makeLinksHTML().indexOf("https://www.jaco.or.jp/kaiin/39th/") !== -1, "special page link should exist");
+      console.assert(makeLinksHTML().indexOf("https://jaco1972.my.site.com/login") !== -1, "voting login link should exist");
+      console.assert(makeLinksHTML().indexOf("docs.google.com/forms") !== -1, "fallback voting form link should exist");
+      console.assert(typeof getAsOfText() === "string", "as-of text should be string");
+
+      const occupied = {};
+      prefs.forEach(function(pref) {
+        const key = pref.row + ":" + pref.col;
+        console.assert(!occupied[key], "duplicate tile position: " + key + " for " + pref.name + " and " + occupied[key]);
+        occupied[key] = pref.name;
+      });
+
+      const publicHTML = buildPublicHTML();
+      console.assert(publicHTML.indexOf("</html>") !== -1, "public HTML should contain closing html tag");
+      console.assert(publicHTML.indexOf("<script") === -1, "public HTML should contain no script tags");
+      console.assert(publicHTML.indexOf("undefined") === -1, "public HTML should not contain undefined");
+    }
+
+    document.getElementById("clearButton").addEventListener("click", clearAll);
+    document.getElementById("sampleButton").addEventListener("click", sampleData);
+    document.getElementById("exportCsvButton").addEventListener("click", exportCSV);
+    document.getElementById("copyButton").addEventListener("click", copyOutput);
+    document.getElementById("generateButton").addEventListener("click", generatePublicHTML);
+    document.getElementById("downloadButton").addEventListener("click", downloadPublicHTML);
+    asOfInput.addEventListener("input", updateAsOfDisplay);
+
+    createControls();
+    createMap();
+    updateSummary();
+    runTests();
+  </script>
+</body>
+</html>
